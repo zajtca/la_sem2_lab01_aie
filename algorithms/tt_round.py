@@ -27,7 +27,42 @@ def tt_round(
         max_rank: максимальный TT-ранг (None = без ограничения)
         eps:      относительная точность усечения
     """
-    pass
+    d = len(tt.cores)
+    if d == 1:
+        return tt.copy()
+
+    rc = right_canonicalize(tt, backend)
+    cores = [core.copy() for core in rc.cores]
+
+    g1_norm = cores[0].norm()
+    if g1_norm > 1e-30:
+        delta = eps * g1_norm / math.sqrt(d - 1)
+    else:
+        delta = 0.0
+
+    for k in range(d - 1):
+        core = cores[k]
+        r_left, n_k, r_right = core.shape
+
+        mat = backend.reshape(core, (r_left * n_k, r_right))
+        u, s, vt = backend.svd(mat, full_matrices=False)
+
+        rank = _compute_rank(s, delta, max_rank)
+
+        u_trunc = _truncate_columns(u, rank, backend)
+        cores[k] = backend.reshape(u_trunc, (r_left, n_k, rank))
+
+        s_trunc = _truncate_vector(s, rank, backend)
+        vt_trunc = _truncate_rows(vt, rank, backend)
+        carry = _multiply_diag_matrix(s_trunc, vt_trunc, rank, backend)
+
+        nxt = cores[k + 1]
+        n_left, n_next, n_right = nxt.shape
+        nxt_mat = backend.reshape(nxt, (n_left, n_next * n_right))
+        new_nxt = backend.matmul(carry, nxt_mat)
+        cores[k + 1] = backend.reshape(new_nxt, (rank, n_next, n_right))
+
+    return TTTensor(cores)
 
 
 # ════════════════════════════════════════════════
@@ -48,7 +83,29 @@ def _compute_rank(
         delta:    абсолютный порог усечения (0 — без усечения по delta)
         max_rank: максимально допустимый ранг (None = без ограничения)
     """
-    pass
+    k = S.shape[0]
+    if k == 0:
+        return 1
+
+    sigma = S.data
+    rank = k
+
+    if delta > 0:
+        threshold = delta * delta
+        tail = 0.0
+        r = k
+        while r > 1:
+            tail += sigma[r - 1] * sigma[r - 1]
+            if tail <= threshold:
+                r -= 1
+            else:
+                break
+        rank = r
+
+    if max_rank is not None:
+        rank = min(rank, max_rank)
+
+    return max(1, rank)
 
 
 def _truncate_columns(
@@ -64,7 +121,13 @@ def _truncate_columns(
         rank:    число сохраняемых столбцов
         backend: интерфейс backend
     """
-    pass
+    m, n = backend.shape(matrix)
+    src = matrix.data
+    data = []
+    for i in range(m):
+        base = i * n
+        data.extend(src[base:base + rank])
+    return DenseTensor((m, rank), data=data)
 
 
 def _truncate_rows(
@@ -80,7 +143,9 @@ def _truncate_rows(
         rank:    число сохраняемых строк
         backend: интерфейс backend
     """
-    pass
+    _, n = backend.shape(matrix)
+    data = list(matrix.data[:rank * n])
+    return DenseTensor((rank, n), data=data)
 
 
 def _truncate_vector(
@@ -96,7 +161,8 @@ def _truncate_vector(
         rank:    число сохраняемых элементов
         backend: интерфейс backend
     """
-    pass
+    data = list(vector.data[:rank])
+    return DenseTensor((rank,), data=data)
 
 
 def _multiply_diag_matrix(
@@ -115,4 +181,13 @@ def _multiply_diag_matrix(
         rank:     число строк матрицы и длина диагонального вектора
         backend:  интерфейс backend
     """
-    pass
+    _, n = backend.shape(matrix)
+    src = matrix.data
+    dvec = diag_vec.data
+    data = [0.0] * (rank * n)
+    for i in range(rank):
+        scale = dvec[i]
+        base = i * n
+        for j in range(n):
+            data[base + j] = scale * src[base + j]
+    return DenseTensor((rank, n), data=data)

@@ -23,7 +23,24 @@ def validate_shape(
         ValueError: если хотя бы один элемент shape не является
                     положительным целым числом
     """
-    pass
+    if not isinstance(shape, (tuple, list)):
+        raise TypeError(
+            f"shape должен быть tuple или list, получено {type(shape).__name__}"
+        )
+
+    result: list[int] = []
+    for dim in shape:
+        if isinstance(dim, bool) or not isinstance(dim, int):
+            raise ValueError(
+                f"Размер моды должен быть целым числом, получено {dim!r}"
+            )
+        if dim <= 0:
+            raise ValueError(
+                f"Размер моды должен быть положительным, получено {dim}"
+            )
+        result.append(dim)
+
+    return tuple(result)
 
 
 def compute_size(shape: tuple[int, ...]) -> int:
@@ -33,7 +50,10 @@ def compute_size(shape: tuple[int, ...]) -> int:
     Args:
         shape: кортеж размеров тензора (n_0, n_1, ..., n_{d-1})
     """
-    pass
+    size: int = 1
+    for dim in shape:
+        size *= dim
+    return size
 
 
 def compute_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
@@ -46,7 +66,11 @@ def compute_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
     Args:
         shape: кортеж размеров тензора (n_0, n_1, ..., n_{d-1})
     """
-    pass
+    d: int = len(shape)
+    strides: list[int] = [1] * d
+    for k in range(d - 2, -1, -1):
+        strides[k] = strides[k + 1] * shape[k + 1]
+    return tuple(strides)
 
 
 def multi_index_to_flat(
@@ -61,7 +85,10 @@ def multi_index_to_flat(
         multi_index: кортеж индексов (i_0, i_1, ..., i_{d-1})
         strides:     кортеж шагов   (s_0, s_1, ..., s_{d-1})
     """
-    pass
+    flat: int = 0
+    for idx, stride in zip(multi_index, strides):
+        flat += idx * stride
+    return flat
 
 
 def flat_to_multi_index(
@@ -75,7 +102,13 @@ def flat_to_multi_index(
         flat_index: плоский индекс в списке данных
         shape:      кортеж размеров тензора (n_0, n_1, ..., n_{d-1})
     """
-    pass
+    d: int = len(shape)
+    multi: list[int] = [0] * d
+    rem: int = flat_index
+    for k in range(d - 1, -1, -1):
+        multi[k] = rem % shape[k]
+        rem //= shape[k]
+    return tuple(multi)
 
 def check_shapes_match(
     shape1: tuple[int, ...],
@@ -94,4 +127,7 @@ def check_shapes_match(
     Raises:
         ValueError: если формы не совпадают
     """
-    pass
+    if tuple(shape1) != tuple(shape2):
+        raise ValueError(
+            f"Формы тензоров не совпадают: {tuple(shape1)} != {tuple(shape2)}"
+        )
