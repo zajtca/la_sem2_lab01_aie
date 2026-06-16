@@ -26,15 +26,18 @@ def left_canonicalize(tt: TTTensor, backend: BackendInterface) -> TTTensor:
         r_left, n_k, r_right = core.shape
 
         mat = backend.reshape(core, (r_left * n_k, r_right))
-        q, r = backend.qr(mat)
+        u, s, vt = backend.svd(mat, full_matrices=False)
 
-        rank = backend.shape(q)[1]
-        cores[k] = backend.reshape(q, (r_left, n_k, rank))
+        rank = backend.shape(u)[1]
+
+        cores[k] = backend.reshape(u, (r_left, n_k, rank))
+
+        carry = _multiply_diag_matrix(s, vt, rank, backend)
 
         nxt = cores[k + 1]
         n_left, n_next, n_right = nxt.shape
         nxt_mat = backend.reshape(nxt, (n_left, n_next * n_right))
-        new_nxt = backend.matmul(r, nxt_mat)
+        new_nxt = backend.matmul(carry, nxt_mat)
         cores[k + 1] = backend.reshape(new_nxt, (rank, n_next, n_right))
 
     return TTTensor(cores)
@@ -56,14 +59,13 @@ def right_canonicalize(tt: TTTensor, backend: BackendInterface) -> TTTensor:
         r_left, n_k, r_right = core.shape
 
         mat = backend.reshape(core, (r_left, n_k * r_right))
-        mat_t = backend.transpose(mat)
-        q, r = backend.qr(mat_t)
+        u, s, vt = backend.svd(mat, full_matrices=False)
 
-        rank = backend.shape(q)[1]
-        qt = backend.transpose(q)
-        cores[k] = backend.reshape(qt, (rank, n_k, r_right))
+        rank = backend.shape(u)[1]
 
-        carry = backend.transpose(r)
+        cores[k] = backend.reshape(vt, (rank, n_k, r_right))
+
+        carry = _multiply_columns_by_diag(u, s, backend)
 
         prev = cores[k - 1]
         p_left, n_prev, p_right = prev.shape
