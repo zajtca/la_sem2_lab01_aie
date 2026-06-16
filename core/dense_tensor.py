@@ -129,14 +129,14 @@ class DenseTensor:
         """
         shape: list[int] = []
         cursor = nested
-        while isinstance(cursor, list):
+        while isinstance(cursor, (list, tuple)):
             shape.append(len(cursor))
             cursor = cursor[0] if len(cursor) > 0 else None
 
         data: list[float] = []
 
         def _flatten(node) -> None:
-            if isinstance(node, list):
+            if isinstance(node, (list, tuple)):
                 for item in node:
                     _flatten(item)
             else:
